@@ -1,11 +1,8 @@
-import json
-
 import streamlit as st
 import pandas as pd
 import joblib
-import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Predictor de Puesto en F1", page_icon="🏁", layout="centered")
+st.set_page_config(page_title="Predictor de Puesto en F1", page_icon="🏁", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Datos auxiliares (derivados del dataset 2022-2024) para que la interfaz
@@ -116,10 +113,12 @@ CIRCUIT_NAMES = {
     "zandvoort": "Circuit Park Zandvoort",
 }
 
-# nombre visible (piloto o escudería) -> color de su equipo, para pintar
-# cada opción de los desplegables con el color real de su escudería.
-NAME_COLOR_MAP = {info["name"]: TEAM_COLORS[info["team"]] for info in DRIVER_INFO.values()}
-NAME_COLOR_MAP.update({TEAM_NAMES[tid]: TEAM_COLORS[tid] for tid in TEAM_NAMES})
+SHORT_NAME = {did: info["name"].split()[-1] for did, info in DRIVER_INFO.items()}
+
+# Pilotos agrupados y ordenados por escudería, para que el "muro" de botones
+# quede agrupado por color en vez de disperso alfabéticamente.
+DRIVER_ORDER = sorted(DRIVER_INFO, key=lambda d: (TEAM_NAMES[DRIVER_INFO[d]["team"]], DRIVER_INFO[d]["name"]))
+TEAM_ORDER = sorted(TEAM_NAMES, key=lambda t: TEAM_NAMES[t])
 
 
 def pill(color: str, text: str) -> str:
@@ -142,177 +141,149 @@ def cargar_artefactos():
 modelo, scaler, encoders, columnas, circuito_a_pais = cargar_artefactos()
 
 # ---------------------------------------------------------------------------
-# Estilos — tema F1: fondo rojo/negro, tarjetas de cristal, inputs en blanco.
+# Estilos — tema F1: fondo rojo/negro con relieve, tarjetas de cristal,
+# inputs en blanco y botones de piloto/escudería coloreados por equipo.
 # ---------------------------------------------------------------------------
 
+driver_btn_css = "\n".join(
+    f'.st-key-driver_{did} button {{ background:{TEAM_COLORS[info["team"]]} !important; '
+    f'border:2px solid rgba(255,255,255,0.25) !important; color:#fff !important; }}'
+    for did, info in DRIVER_INFO.items()
+)
+team_btn_css = "\n".join(
+    f'.st-key-team_{tid} button {{ background:{color} !important; '
+    f'border:2px solid rgba(255,255,255,0.25) !important; color:#fff !important; }}'
+    for tid, color in TEAM_COLORS.items()
+)
+
 st.markdown(
-    """
+    f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700;900&display=swap');
 
-    html, body, [class*="css"] { font-family: 'Titillium Web', sans-serif; }
+    html, body, [class*="css"] {{ font-family: 'Titillium Web', sans-serif; }}
 
-    [data-testid="stAppViewContainer"] {
-        background: linear-gradient(160deg, #c40000 0%, #6b0000 45%, #150000 100%) fixed;
-    }
-    [data-testid="stHeader"] {
-        background: #150000;
-    }
-    [data-testid="stAppViewContainer"] * {
-        color: #f5f5f5;
-    }
+    [data-testid="stAppViewContainer"] {{
+        background:
+            radial-gradient(circle at 12% -10%, rgba(255,60,60,0.35), transparent 42%),
+            radial-gradient(circle at 105% 15%, rgba(255,255,255,0.08), transparent 40%),
+            radial-gradient(circle at 50% 120%, rgba(0,0,0,0.6), transparent 55%),
+            linear-gradient(160deg, #b30000 0%, #6b0000 40%, #1a0000 85%, #000000 100%) fixed;
+    }}
+    [data-testid="stHeader"] {{ background: rgba(15,0,0,0.9); }}
+    [data-testid="stAppViewContainer"] * {{ color: #f5f5f5; }}
 
-    .f1-hero {
-        background: rgba(0,0,0,0.4);
-        border-radius: 16px;
-        padding: 1.6rem 1.8rem;
-        margin-bottom: 1.2rem;
-        border: 1px solid rgba(255,255,255,0.15);
-        backdrop-filter: blur(6px);
-    }
-    .f1-hero h1 {
+    .f1-hero {{
+        background: rgba(0,0,0,0.45);
+        border-radius: 18px;
+        padding: 1.7rem 2rem;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        backdrop-filter: blur(8px);
+    }}
+    .f1-hero h1 {{
         color: #ffffff;
         font-weight: 900;
-        font-size: 2.2rem;
+        font-size: 2.3rem;
         letter-spacing: 0.03em;
-        margin: 0 0 0.35rem 0;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    }
-    .f1-hero p {
-        color: #f0f0f0;
-        font-size: 1rem;
-        margin: 0;
-    }
-    .checker-strip {
+        margin: 0 0 0.4rem 0;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.55);
+    }}
+    .f1-hero p {{ color: #f0f0f0; font-size: 1rem; margin: 0; }}
+
+    .checker-strip {{
         height: 10px;
         border-radius: 4px;
-        margin: 0.9rem 0 1.4rem 0;
+        margin: 0.8rem 0 1.2rem 0;
         background-image: repeating-linear-gradient(90deg, #0c0c0c 0 12px, #ffffff 12px 24px);
-        opacity: 0.9;
-    }
-    .section-title {
-        font-weight: 700;
-        font-size: 1.15rem;
-        margin-bottom: 0.1rem;
-        color: #ffffff;
-    }
-    .section-desc {
-        font-size: 0.88rem;
-        opacity: 0.85;
-        margin-bottom: 0.8rem;
-    }
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        opacity: 0.95;
+    }}
 
-    /* Tarjetas de cristal alrededor de cada columna */
-    .st-key-col1_card, .st-key-col2_card {
-        background: rgba(0,0,0,0.38) !important;
+    .section-title {{ font-weight: 700; font-size: 1.2rem; margin: 0.2rem 0 0.1rem 0; color: #ffffff; }}
+    .section-desc {{ font-size: 0.86rem; opacity: 0.85; margin-bottom: 0.7rem; }}
+    .subgroup-title {{ font-weight: 700; font-size: 0.95rem; margin: 0.6rem 0 0.4rem 0; opacity: 0.9; }}
+
+    .glass-card {{
+        background: rgba(0,0,0,0.4) !important;
         border-radius: 18px !important;
-        border: 1px solid rgba(255,255,255,0.15) !important;
-        padding: 0.6rem 1rem 1.2rem 1rem !important;
+        border: 1px solid rgba(255,255,255,0.16) !important;
+        padding: 1rem 1.2rem 1.3rem 1.2rem !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         backdrop-filter: blur(6px);
-    }
+        margin-bottom: 1rem;
+    }}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div .glass-anchor) {{
+        background: rgba(0,0,0,0.4) !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(255,255,255,0.16) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        backdrop-filter: blur(6px);
+    }}
 
-    /* Inputs y selects en blanco, redondeados e interactivos */
+    /* Inputs y selects: cajas blancas, redondeadas e interactivas */
     div[data-testid="stNumberInput"] input,
-    div[data-baseweb="select"] > div {
+    div[data-baseweb="select"] > div {{
         background: #ffffff !important;
         border-radius: 10px !important;
         border: 2px solid rgba(255,255,255,0.6) !important;
         transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
-    }
-    div[data-testid="stNumberInput"] input {
-        color: #111111 !important;
-    }
-    div[data-baseweb="select"] * {
-        color: #111111 !important;
-    }
+    }}
+    div[data-testid="stNumberInput"] input {{ color: #111111 !important; }}
+    div[data-baseweb="select"] * {{ color: #111111 !important; }}
     div[data-testid="stNumberInput"] input:focus,
-    div[data-baseweb="select"]:focus-within > div {
-        box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+    div[data-baseweb="select"]:focus-within > div {{
+        box-shadow: 0 0 0 3px rgba(255,255,255,0.55);
         transform: translateY(-1px);
-    }
-    div[data-testid="stNumberInput"] button {
-        border-radius: 8px !important;
-    }
-    [data-baseweb="popover"] li[role="option"] {
-        transition: background 0.15s ease;
-        border-radius: 6px;
-    }
+    }}
+    div[data-testid="stNumberInput"] button {{ border-radius: 8px !important; }}
 
-    div.stButton > button {
-        background: linear-gradient(90deg, #E10600, #ff4136);
-        color: white;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        border: none;
-        border-radius: 10px;
-        padding: 0.7rem 1.2rem;
+    /* Botones de piloto / escudería: coloreados por equipo */
+    div.stButton button {{
         width: 100%;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-        transition: transform 0.12s ease, box-shadow 0.12s ease;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.45);
-        color: white;
-    }
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        padding: 0.5rem 0.4rem !important;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+    }}
+    div.stButton button:hover {{
+        transform: translateY(-3px) scale(1.03);
+        filter: brightness(1.2);
+        box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+    }}
+    {driver_btn_css}
+    {team_btn_css}
 
-    .result-card {
+    .st-key-predict_action button {{
+        background: linear-gradient(90deg, #E10600, #ff4136) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.03em;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.8rem 1.2rem !important;
+        font-size: 1.05rem !important;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    }}
+    .st-key-predict_action button:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.55);
+    }}
+
+    .result-card {{
         border-radius: 16px;
         padding: 1.2rem 1.4rem;
         margin-bottom: 1rem;
         background: rgba(0,0,0,0.55);
         border-left: 8px solid var(--team-color, #E10600);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.4);
         backdrop-filter: blur(6px);
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
-)
-
-# Script "puente": pinta cada opción de los desplegables (piloto/escudería)
-# con el color real de su equipo, y añade un puntito de color delante.
-components.html(
-    f"""
-    <script>
-    const COLOR_MAP = {json.dumps(NAME_COLOR_MAP)};
-    function colorizeOptions() {{
-        try {{
-            const doc = window.parent.document;
-            const items = doc.querySelectorAll('li[role="option"]');
-            items.forEach((li) => {{
-                const label = li.textContent.trim();
-                const color = COLOR_MAP[label];
-                if (color && !li.dataset.f1Colored) {{
-                    li.dataset.f1Colored = "1";
-                    li.style.borderLeft = `5px solid ${{color}}`;
-                    li.style.background = `linear-gradient(90deg, ${{color}}26, transparent 65%)`;
-                    const dot = doc.createElement('span');
-                    dot.style.display = 'inline-block';
-                    dot.style.width = '9px';
-                    dot.style.height = '9px';
-                    dot.style.borderRadius = '50%';
-                    dot.style.background = color;
-                    dot.style.marginRight = '8px';
-                    li.prepend(dot);
-                    li.addEventListener('mouseenter', () => {{
-                        li.style.background = `linear-gradient(90deg, ${{color}}55, transparent 85%)`;
-                    }});
-                    li.addEventListener('mouseleave', () => {{
-                        li.style.background = `linear-gradient(90deg, ${{color}}26, transparent 65%)`;
-                    }});
-                }}
-            }});
-        }} catch (e) {{ /* entorno restringido: se ignora */ }}
-    }}
-    try {{
-        const observer = new MutationObserver(colorizeOptions);
-        observer.observe(window.parent.document.body, {{ childList: true, subtree: true }});
-        colorizeOptions();
-        setInterval(colorizeOptions, 400);
-    }} catch (e) {{ /* entorno restringido: se ignora */ }}
-    </script>
-    """,
-    height=0,
 )
 
 st.markdown(
@@ -333,47 +304,120 @@ st.caption(
     "(vuelta actual, posición, paradas en boxes)."
 )
 
+# ---------------------------------------------------------------------------
+# Selección de piloto y escudería mediante "muros" de botones de color.
+# ---------------------------------------------------------------------------
+
+if "selected_driver" not in st.session_state:
+    st.session_state["selected_driver"] = DRIVER_ORDER[0]
+if "selected_team" not in st.session_state:
+    st.session_state["selected_team"] = DRIVER_INFO[DRIVER_ORDER[0]]["team"]
+if "_prev_driver" not in st.session_state:
+    st.session_state["_prev_driver"] = DRIVER_ORDER[0]
+
+st.markdown('<div class="section-title">🏎️ Elige piloto y escudería</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="section-desc">Cada botón lleva el color real de su equipo — pulsa un piloto y su '
+    'escudería se selecciona sola (puedes cambiarla a mano para escenarios hipotéticos).</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="subgroup-title">Piloto</div>', unsafe_allow_html=True)
+clicked_driver = None
+driver_cols = st.columns(7)
+for i, did in enumerate(DRIVER_ORDER):
+    with driver_cols[i % 7]:
+        with st.container(key=f"driver_{did}"):
+            if st.button(SHORT_NAME[did], key=f"btn_driver_{did}"):
+                clicked_driver = did
+
+if clicked_driver:
+    st.session_state["selected_driver"] = clicked_driver
+
+if st.session_state["_prev_driver"] != st.session_state["selected_driver"]:
+    st.session_state["selected_team"] = DRIVER_INFO[st.session_state["selected_driver"]]["team"]
+    st.session_state["_prev_driver"] = st.session_state["selected_driver"]
+
+st.markdown('<div class="subgroup-title">Escudería</div>', unsafe_allow_html=True)
+clicked_team = None
+team_cols = st.columns(6)
+for i, tid in enumerate(TEAM_ORDER):
+    with team_cols[i % 6]:
+        with st.container(key=f"team_{tid}"):
+            if st.button(TEAM_NAMES[tid], key=f"btn_team_{tid}"):
+                clicked_team = tid
+
+if clicked_team:
+    st.session_state["selected_team"] = clicked_team
+
+driverId = st.session_state["selected_driver"]
+constructorId = st.session_state["selected_team"]
+constructorName = TEAM_NAMES[constructorId]
+constructor_nationality = TEAM_NATIONALITY[constructorId]
+driver_nationality = DRIVER_INFO[driverId]["nationality"]
+number = DRIVER_INFO[driverId]["number"]
+team_color = TEAM_COLORS[constructorId]
+
+st.markdown(
+    f'{pill(TEAM_COLORS[DRIVER_INFO[driverId]["team"]], "Piloto: " + DRIVER_INFO[driverId]["name"])} '
+    f'&nbsp; {pill(team_color, "Escudería: " + constructorName)} '
+    f'&nbsp; {DRIVER_INFO[driverId]["nationality"]} · Nº {DRIVER_INFO[driverId]["number"]} · '
+    f'{constructor_nationality}',
+    unsafe_allow_html=True,
+)
+
+# resalte de la selección actual (anillo blanco + brillo del color de equipo)
+st.markdown(
+    f"""
+    <style>
+    .st-key-driver_{driverId} button {{
+        box-shadow: 0 0 0 3px #ffffff, 0 0 16px {TEAM_COLORS[DRIVER_INFO[driverId]["team"]]} !important;
+        transform: scale(1.05);
+    }}
+    .st-key-team_{constructorId} button {{
+        box-shadow: 0 0 0 3px #ffffff, 0 0 16px {team_color} !important;
+        transform: scale(1.05);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="checker-strip"></div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Resto de variables, en cuadrícula compacta (2 filas) en vez de una lista larga.
+# ---------------------------------------------------------------------------
+
 col1, col2 = st.columns(2)
 
 with col1:
-    with st.container(border=True, key="col1_card"):
+    with st.container(border=True):
+        st.markdown('<span class="glass-anchor"></span>', unsafe_allow_html=True)
         st.markdown(
             '<div class="section-title">📋 Antes de la carrera</div>'
-            '<div class="section-desc">Datos conocidos antes de la salida: quién corre, con qué coche '
-            'y desde qué posición.</div>',
+            '<div class="section-desc">Datos conocidos antes de la salida: circuito, parrilla '
+            'y clasificación.</div>',
             unsafe_allow_html=True,
         )
 
-        season = st.number_input("Temporada", min_value=2022, max_value=2026, value=2024)
-        ronda = st.number_input("Ronda", min_value=1, max_value=24, value=1)
+        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+        with r1c1:
+            season = st.number_input("Temporada", min_value=2022, max_value=2026, value=2024)
+        with r1c2:
+            ronda = st.number_input("Ronda", min_value=1, max_value=24, value=1)
+        with r1c3:
+            grid = st.number_input("Grid", min_value=1, max_value=20, value=1)
+        with r1c4:
+            quali_position = st.number_input("Quali", min_value=1, max_value=20, value=1)
 
-        driver_options = sorted(DRIVER_INFO, key=lambda d: DRIVER_INFO[d]["name"])
-        driverId = st.selectbox(
-            "Piloto", options=driver_options, format_func=lambda d: DRIVER_INFO[d]["name"], key="driverId"
-        )
-
-        if st.session_state.get("_prev_driver") != driverId:
-            st.session_state["constructorId"] = DRIVER_INFO[driverId]["team"]
-            st.session_state["_prev_driver"] = driverId
-
-        driver_team_color = TEAM_COLORS[DRIVER_INFO[driverId]["team"]]
-        st.markdown(
-            f'{pill(driver_team_color, TEAM_NAMES[DRIVER_INFO[driverId]["team"]])} '
-            f'&nbsp; {DRIVER_INFO[driverId]["nationality"]} · Nº {DRIVER_INFO[driverId]["number"]}',
-            unsafe_allow_html=True,
-        )
-
-        team_options = sorted(TEAM_NAMES, key=lambda c: TEAM_NAMES[c])
-        constructorId = st.selectbox(
-            "Escudería", options=team_options, format_func=lambda c: TEAM_NAMES[c], key="constructorId"
-        )
-        constructorName = TEAM_NAMES[constructorId]
-        constructor_nationality = TEAM_NATIONALITY[constructorId]
-        driver_nationality = DRIVER_INFO[driverId]["nationality"]
-        number = DRIVER_INFO[driverId]["number"]
-
-        team_color = TEAM_COLORS[constructorId]
-        st.markdown(pill(team_color, f"Escudería {constructor_nationality}"), unsafe_allow_html=True)
+        r2c1, r2c2, r2c3 = st.columns(3)
+        with r2c1:
+            q1 = st.number_input("Q1 (seg)", min_value=0.0, value=90.0)
+        with r2c2:
+            q2 = st.number_input("Q2 (seg)", min_value=0.0, value=89.0)
+        with r2c3:
+            q3 = st.number_input("Q3 (seg)", min_value=0.0, value=88.0)
 
         circuit_options = sorted(CIRCUIT_NAMES, key=lambda c: CIRCUIT_NAMES[c])
         circuitId = st.selectbox(
@@ -383,28 +427,33 @@ with col1:
         country = circuito_a_pais[circuitName]
         st.caption(f"📍 País: **{country}**")
 
-        grid = st.number_input("Posición de salida (grid)", min_value=1, max_value=20, value=1)
-        quali_position = st.number_input("Posición en clasificación", min_value=1, max_value=20, value=1)
-        q1 = st.number_input("Tiempo Q1 (segundos)", min_value=0.0, value=90.0)
-        q2 = st.number_input("Tiempo Q2 (segundos)", min_value=0.0, value=89.0)
-        q3 = st.number_input("Tiempo Q3 (segundos)", min_value=0.0, value=88.0)
-
 with col2:
-    with st.container(border=True, key="col2_card"):
+    with st.container(border=True):
+        st.markdown('<span class="glass-anchor"></span>', unsafe_allow_html=True)
         st.markdown(
             '<div class="section-title">🔴 En directo</div>'
             '<div class="section-desc">Datos que cambian vuelta a vuelta mientras la carrera '
             'está en marcha.</div>',
             unsafe_allow_html=True,
         )
-        lap = st.number_input("Vuelta actual", min_value=1, max_value=80, value=1)
-        position_en_vuelta = st.number_input("Posición en esa vuelta", min_value=1, max_value=20, value=1)
-        paradas_hasta_ahora = st.number_input("Paradas hechas hasta ahora", min_value=0, max_value=5, value=0)
-        ultima_pit_duration = st.number_input("Duración última parada (segundos)", min_value=0.0, value=0.0)
+        r3c1, r3c2 = st.columns(2)
+        with r3c1:
+            lap = st.number_input("Vuelta actual", min_value=1, max_value=80, value=1)
+        with r3c2:
+            position_en_vuelta = st.number_input("Posición en vuelta", min_value=1, max_value=20, value=1)
+
+        r4c1, r4c2 = st.columns(2)
+        with r4c1:
+            paradas_hasta_ahora = st.number_input("Paradas hechas", min_value=0, max_value=5, value=0)
+        with r4c2:
+            ultima_pit_duration = st.number_input("Última parada (seg)", min_value=0.0, value=0.0)
 
 st.markdown('<div class="checker-strip"></div>', unsafe_allow_html=True)
 
-if st.button("🏎️ Predecir posición final", type="primary"):
+with st.container(key="predict_action"):
+    predict_clicked = st.button("🏎️ Predecir posición final", type="primary")
+
+if predict_clicked:
 
     entrada = pd.DataFrame([{
         "season": season,
