@@ -165,10 +165,10 @@ st.markdown(
 
     [data-testid="stAppViewContainer"] {{
         background:
-            radial-gradient(circle at 12% -10%, rgba(225,6,0,0.38), transparent 40%),
-            radial-gradient(circle at 105% 10%, rgba(225,6,0,0.22), transparent 42%),
-            radial-gradient(circle at 50% 40%, rgba(255,255,255,0.05), transparent 55%),
-            linear-gradient(180deg, #17070a 0%, #0c0508 45%, #050304 100%);
+            radial-gradient(circle at 15% -10%, rgba(255,40,20,0.55), transparent 45%),
+            radial-gradient(circle at 100% 5%, rgba(255,40,20,0.4), transparent 45%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06), transparent 60%),
+            linear-gradient(165deg, #7a0000 0%, #4a0000 35%, #260000 65%, #140000 100%);
         background-attachment: scroll;
     }}
     [data-testid="stMain"] {{
@@ -178,23 +178,29 @@ st.markdown(
     [data-testid="stAppViewContainer"] * {{ color: #f5f5f5; }}
 
     .f1-hero {{
-        background: rgba(0,0,0,0.45);
+        background: rgba(0,0,0,0.4);
         border-radius: 18px;
-        padding: 1.7rem 2rem;
+        padding: 2rem 2rem;
         margin-bottom: 1rem;
         border: 1px solid rgba(255,255,255,0.18);
         box-shadow: 0 10px 30px rgba(0,0,0,0.35);
         backdrop-filter: blur(8px);
+        text-align: center;
     }}
     .f1-hero h1 {{
         color: #ffffff;
         font-weight: 900;
-        font-size: 2.3rem;
+        font-size: 2.8rem;
         letter-spacing: 0.03em;
-        margin: 0 0 0.4rem 0;
+        margin: 0 0 0.5rem 0;
         text-shadow: 0 2px 12px rgba(0,0,0,0.55);
     }}
-    .f1-hero p {{ color: #f0f0f0; font-size: 1rem; margin: 0; }}
+    .f1-hero p {{
+        color: #f5f5f5;
+        font-size: 1.1rem;
+        margin: 0 auto;
+        max-width: 780px;
+    }}
 
     .checker-strip {{
         height: 10px;
@@ -258,6 +264,57 @@ st.markdown(
     }}
     label[data-testid="stWidgetLabel"] p {{
         font-weight: 600 !important;
+    }}
+    /* la lista desplegable del select se renderiza en un portal aparte:
+       se refuerza aquí para que el texto siempre sea legible (fondo blanco,
+       letra oscura) sin depender de dónde la monte Streamlit. */
+    div[data-baseweb="popover"] {{
+        background: #ffffff !important;
+        border-radius: 10px !important;
+    }}
+    div[data-baseweb="popover"] li {{
+        color: #111111 !important;
+        background: #ffffff !important;
+    }}
+    div[data-baseweb="popover"] li:hover {{
+        background: #ffe8e5 !important;
+    }}
+    .country-caption {{
+        font-size: 1rem !important;
+        opacity: 0.95;
+        margin-top: 0.4rem;
+    }}
+    .footer-note {{
+        font-size: 0.95rem;
+        text-align: center;
+        opacity: 0.85;
+        max-width: 900px;
+        margin: 0 auto;
+    }}
+    .intro-note {{
+        font-size: 1rem;
+        text-align: center;
+        max-width: 900px;
+        margin: 0 auto 0.6rem auto;
+        opacity: 0.95;
+    }}
+    .selection-summary {{
+        text-align: center;
+        margin: 0.8rem 0;
+    }}
+    .selection-summary .label {{
+        font-size: 0.9rem;
+        opacity: 0.85;
+        margin-bottom: 0.5rem;
+    }}
+    .info-chip {{
+        display: inline-block;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.25);
+        border-radius: 999px;
+        padding: 3px 12px;
+        font-size: 0.85rem;
+        margin: 2px 4px;
     }}
 
     /* Botones de piloto / escudería: coloreados por equipo, mismo tamaño
@@ -335,10 +392,11 @@ st.markdown(
 )
 st.markdown('<div class="checker-strip"></div>', unsafe_allow_html=True)
 
-st.caption(
-    "🧠 El modelo combina dos tipos de información: lo que ya sabemos **antes de que se apague el "
-    "semáforo** (parrilla, clasificación, circuito) y lo que va llegando **en directo durante la carrera** "
-    "(vuelta actual, posición, paradas en boxes)."
+st.markdown(
+    '<div class="intro-note">🧠 El modelo combina dos tipos de información: lo que ya sabemos '
+    '<b>antes de que se apague el semáforo</b> (parrilla, clasificación, circuito) y lo que va llegando '
+    '<b>en directo durante la carrera</b> (vuelta actual, posición, paradas en boxes).</div>',
+    unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -354,8 +412,10 @@ if "_prev_driver" not in st.session_state:
 
 st.markdown('<div class="section-title">🏎️ Elige piloto y escudería</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="section-desc">Cada botón lleva el color real de su equipo — pulsa un piloto y su '
-    'escudería se selecciona sola (puedes cambiarla a mano para escenarios hipotéticos).</div>',
+    '<div class="section-desc">Pilotos y escuderías que compitieron entre las temporadas '
+    '<b>2022 y 2024</b> (los años con los que se entrenó el modelo). Cada botón lleva el color real '
+    'de su equipo — pulsa un piloto y su escudería se selecciona sola (puedes cambiarla a mano para '
+    'probar escenarios hipotéticos, como un piloto fichando por otro equipo).</div>',
     unsafe_allow_html=True,
 )
 
@@ -396,10 +456,16 @@ number = DRIVER_INFO[driverId]["number"]
 team_color = TEAM_COLORS[constructorId]
 
 st.markdown(
-    f'{pill(TEAM_COLORS[DRIVER_INFO[driverId]["team"]], "Piloto: " + DRIVER_INFO[driverId]["name"])} '
-    f'&nbsp; {pill(team_color, "Escudería: " + constructorName)} '
-    f'&nbsp; {DRIVER_INFO[driverId]["nationality"]} · Nº {DRIVER_INFO[driverId]["number"]} · '
-    f'{constructor_nationality}',
+    f"""
+    <div class="selection-summary">
+        <div class="label">✅ Has seleccionado:</div>
+        {pill(TEAM_COLORS[DRIVER_INFO[driverId]["team"]], "🏎️ " + DRIVER_INFO[driverId]["name"])}
+        {pill(team_color, "🏁 " + constructorName)}
+        <span class="info-chip">Nacionalidad piloto: {driver_nationality}</span>
+        <span class="info-chip">Nº de coche: {number}</span>
+        <span class="info-chip">Nacionalidad escudería: {constructor_nationality}</span>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -462,7 +528,7 @@ with col1:
         )
         circuitName = CIRCUIT_NAMES[circuitId]
         country = circuito_a_pais[circuitName]
-        st.caption(f"📍 País: **{country}**")
+        st.markdown(f'<div class="country-caption">📍 País: <b>{country}</b></div>', unsafe_allow_html=True)
 
 with col2:
     with st.container(border=True):
@@ -553,7 +619,8 @@ if predict_clicked:
         st.balloons()
 
 st.markdown('<div class="checker-strip"></div>', unsafe_allow_html=True)
-st.caption(
-    "Modelo de Regresión Lineal entrenado con datos F1 2022-2024 (R² en test: 0.72). "
-    "Proyecto académico — las predicciones no reflejan resultados oficiales de F1."
+st.markdown(
+    '<div class="footer-note">Modelo de Regresión Lineal entrenado con datos F1 2022-2024 '
+    '(R² en test: 0.72). Proyecto académico — las predicciones no reflejan resultados oficiales de F1.</div>',
+    unsafe_allow_html=True,
 )
