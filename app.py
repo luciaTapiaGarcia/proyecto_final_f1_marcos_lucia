@@ -165,12 +165,16 @@ st.markdown(
 
     [data-testid="stAppViewContainer"] {{
         background:
-            radial-gradient(circle at 12% -10%, rgba(255,60,60,0.35), transparent 42%),
-            radial-gradient(circle at 105% 15%, rgba(255,255,255,0.08), transparent 40%),
-            radial-gradient(circle at 50% 120%, rgba(0,0,0,0.6), transparent 55%),
-            linear-gradient(160deg, #b30000 0%, #6b0000 40%, #1a0000 85%, #000000 100%) fixed;
+            radial-gradient(circle at 12% -10%, rgba(225,6,0,0.38), transparent 40%),
+            radial-gradient(circle at 105% 10%, rgba(225,6,0,0.22), transparent 42%),
+            radial-gradient(circle at 50% 40%, rgba(255,255,255,0.05), transparent 55%),
+            linear-gradient(180deg, #17070a 0%, #0c0508 45%, #050304 100%);
+        background-attachment: scroll;
     }}
-    [data-testid="stHeader"] {{ background: rgba(15,0,0,0.9); }}
+    [data-testid="stMain"] {{
+        background: transparent;
+    }}
+    [data-testid="stHeader"] {{ background: rgba(10,4,5,0.95); }}
     [data-testid="stAppViewContainer"] * {{ color: #f5f5f5; }}
 
     .f1-hero {{
@@ -222,29 +226,50 @@ st.markdown(
         backdrop-filter: blur(6px);
     }}
 
-    /* Inputs y selects: cajas blancas, redondeadas e interactivas */
+    /* Inputs y selects: cajas blancas, redondeadas e interactivas, con un
+       borde marcado para que se note claramente dónde se puede escribir. */
     div[data-testid="stNumberInput"] input,
     div[data-baseweb="select"] > div {{
         background: #ffffff !important;
         border-radius: 10px !important;
-        border: 2px solid rgba(255,255,255,0.6) !important;
+        border: 2px solid #ffd7d2 !important;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
         transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
     }}
     div[data-testid="stNumberInput"] input {{ color: #111111 !important; }}
     div[data-baseweb="select"] * {{ color: #111111 !important; }}
     div[data-testid="stNumberInput"] input:focus,
     div[data-baseweb="select"]:focus-within > div {{
-        box-shadow: 0 0 0 3px rgba(255,255,255,0.55);
+        border-color: #E10600 !important;
+        box-shadow: 0 0 0 3px rgba(225,6,0,0.35);
         transform: translateY(-1px);
     }}
-    div[data-testid="stNumberInput"] button {{ border-radius: 8px !important; }}
+    div[data-testid="stNumberInput"] button {{
+        border-radius: 8px !important;
+        background: #ffe8e5 !important;
+        border: 1px solid #ffd7d2 !important;
+    }}
+    /* los iconos +/- y la flecha del select heredaban el blanco global y
+       quedaban invisibles sobre fondo blanco: se fuerzan a oscuro */
+    div[data-testid="stNumberInput"] svg,
+    div[data-baseweb="select"] svg {{
+        fill: #111111 !important;
+        color: #111111 !important;
+    }}
+    label[data-testid="stWidgetLabel"] p {{
+        font-weight: 600 !important;
+    }}
 
-    /* Botones de piloto / escudería: coloreados por equipo */
+    /* Botones de piloto / escudería: coloreados por equipo, mismo tamaño
+       para todos independientemente de lo largo del nombre. */
     div.stButton button {{
         width: 100%;
+        min-height: 3rem;
         border-radius: 10px !important;
         font-weight: 700 !important;
         padding: 0.5rem 0.4rem !important;
+        white-space: normal !important;
+        line-height: 1.15 !important;
         transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease !important;
         box-shadow: 0 3px 10px rgba(0,0,0,0.35);
     }}
@@ -256,20 +281,32 @@ st.markdown(
     {driver_btn_css}
     {team_btn_css}
 
+    .st-key-predict_action {{
+        margin: 0.6rem 0 1.2rem 0;
+    }}
     .st-key-predict_action button {{
-        background: linear-gradient(90deg, #E10600, #ff4136) !important;
+        background: linear-gradient(90deg, #ff4136, #E10600, #ff4136) !important;
+        background-size: 200% auto !important;
         color: white !important;
         font-weight: 800 !important;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.04em;
         border: none !important;
-        border-radius: 12px !important;
-        padding: 0.8rem 1.2rem !important;
-        font-size: 1.05rem !important;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+        border-radius: 14px !important;
+        padding: 1.1rem 1.2rem !important;
+        font-size: 1.3rem !important;
+        min-height: 4rem;
+        box-shadow: 0 8px 24px rgba(225,6,0,0.55);
+        animation: f1-pulse 2.2s ease-in-out infinite;
     }}
     .st-key-predict_action button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(0,0,0,0.55);
+        transform: translateY(-3px) scale(1.01);
+        box-shadow: 0 12px 30px rgba(225,6,0,0.75);
+        animation-play-state: paused;
+    }}
+    @keyframes f1-pulse {{
+        0% {{ box-shadow: 0 8px 24px rgba(225,6,0,0.45); background-position: 0% center; }}
+        50% {{ box-shadow: 0 8px 30px rgba(225,6,0,0.85); background-position: 100% center; }}
+        100% {{ box-shadow: 0 8px 24px rgba(225,6,0,0.45); background-position: 0% center; }}
     }}
 
     .result-card {{
@@ -328,7 +365,7 @@ driver_cols = st.columns(7)
 for i, did in enumerate(DRIVER_ORDER):
     with driver_cols[i % 7]:
         with st.container(key=f"driver_{did}"):
-            if st.button(SHORT_NAME[did], key=f"btn_driver_{did}"):
+            if st.button(SHORT_NAME[did], key=f"btn_driver_{did}", use_container_width=True):
                 clicked_driver = did
 
 if clicked_driver:
@@ -344,7 +381,7 @@ team_cols = st.columns(6)
 for i, tid in enumerate(TEAM_ORDER):
     with team_cols[i % 6]:
         with st.container(key=f"team_{tid}"):
-            if st.button(TEAM_NAMES[tid], key=f"btn_team_{tid}"):
+            if st.button(TEAM_NAMES[tid], key=f"btn_team_{tid}", use_container_width=True):
                 clicked_team = tid
 
 if clicked_team:
