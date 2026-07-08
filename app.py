@@ -1,6 +1,9 @@
+import json
+
 import streamlit as st
 import pandas as pd
 import joblib
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Predictor de Puesto en F1", page_icon="🏁", layout="centered")
 
@@ -113,6 +116,11 @@ CIRCUIT_NAMES = {
     "zandvoort": "Circuit Park Zandvoort",
 }
 
+# nombre visible (piloto o escudería) -> color de su equipo, para pintar
+# cada opción de los desplegables con el color real de su escudería.
+NAME_COLOR_MAP = {info["name"]: TEAM_COLORS[info["team"]] for info in DRIVER_INFO.values()}
+NAME_COLOR_MAP.update({TEAM_NAMES[tid]: TEAM_COLORS[tid] for tid in TEAM_NAMES})
+
 
 def pill(color: str, text: str) -> str:
     return (
@@ -134,7 +142,7 @@ def cargar_artefactos():
 modelo, scaler, encoders, columnas, circuito_a_pais = cargar_artefactos()
 
 # ---------------------------------------------------------------------------
-# Estilos
+# Estilos — tema F1: fondo rojo/negro, tarjetas de cristal, inputs en blanco.
 # ---------------------------------------------------------------------------
 
 st.markdown(
@@ -144,22 +152,34 @@ st.markdown(
 
     html, body, [class*="css"] { font-family: 'Titillium Web', sans-serif; }
 
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(160deg, #c40000 0%, #6b0000 45%, #150000 100%) fixed;
+    }
+    [data-testid="stHeader"] {
+        background: #150000;
+    }
+    [data-testid="stAppViewContainer"] * {
+        color: #f5f5f5;
+    }
+
     .f1-hero {
-        background: linear-gradient(120deg, #15151e 0%, #950014 100%);
+        background: rgba(0,0,0,0.4);
         border-radius: 16px;
         padding: 1.6rem 1.8rem;
         margin-bottom: 1.2rem;
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        backdrop-filter: blur(6px);
     }
     .f1-hero h1 {
         color: #ffffff;
         font-weight: 900;
-        font-size: 2.1rem;
+        font-size: 2.2rem;
         letter-spacing: 0.03em;
         margin: 0 0 0.35rem 0;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.5);
     }
     .f1-hero p {
-        color: #e6e6e6;
+        color: #f0f0f0;
         font-size: 1rem;
         margin: 0;
     }
@@ -167,42 +187,132 @@ st.markdown(
         height: 10px;
         border-radius: 4px;
         margin: 0.9rem 0 1.4rem 0;
-        background-image: repeating-linear-gradient(90deg, #1c1c24 0 12px, #ffffff 12px 24px);
-        opacity: 0.85;
-    }
-    .section-card {
-        border-radius: 14px;
-        padding: 1.1rem 1.3rem 0.4rem 1.3rem;
-        margin-bottom: 1rem;
-        border: 1px solid rgba(120,120,120,0.25);
+        background-image: repeating-linear-gradient(90deg, #0c0c0c 0 12px, #ffffff 12px 24px);
+        opacity: 0.9;
     }
     .section-title {
         font-weight: 700;
         font-size: 1.15rem;
         margin-bottom: 0.1rem;
+        color: #ffffff;
     }
     .section-desc {
         font-size: 0.88rem;
-        opacity: 0.75;
+        opacity: 0.85;
         margin-bottom: 0.8rem;
     }
+
+    /* Tarjetas de cristal alrededor de cada columna */
+    .st-key-col1_card, .st-key-col2_card {
+        background: rgba(0,0,0,0.38) !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        padding: 0.6rem 1rem 1.2rem 1rem !important;
+        backdrop-filter: blur(6px);
+    }
+
+    /* Inputs y selects en blanco, redondeados e interactivos */
+    div[data-testid="stNumberInput"] input,
+    div[data-baseweb="select"] > div {
+        background: #ffffff !important;
+        border-radius: 10px !important;
+        border: 2px solid rgba(255,255,255,0.6) !important;
+        transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    div[data-testid="stNumberInput"] input {
+        color: #111111 !important;
+    }
+    div[data-baseweb="select"] * {
+        color: #111111 !important;
+    }
+    div[data-testid="stNumberInput"] input:focus,
+    div[data-baseweb="select"]:focus-within > div {
+        box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+        transform: translateY(-1px);
+    }
+    div[data-testid="stNumberInput"] button {
+        border-radius: 8px !important;
+    }
+    [data-baseweb="popover"] li[role="option"] {
+        transition: background 0.15s ease;
+        border-radius: 6px;
+    }
+
     div.stButton > button {
-        background: #E10600;
+        background: linear-gradient(90deg, #E10600, #ff4136);
         color: white;
         font-weight: 700;
         letter-spacing: 0.03em;
         border: none;
         border-radius: 10px;
-        padding: 0.6rem 1.2rem;
+        padding: 0.7rem 1.2rem;
         width: 100%;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
     }
     div.stButton > button:hover {
-        background: #ff1e14;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.45);
         color: white;
+    }
+
+    .result-card {
+        border-radius: 16px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+        background: rgba(0,0,0,0.55);
+        border-left: 8px solid var(--team-color, #E10600);
+        backdrop-filter: blur(6px);
     }
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+# Script "puente": pinta cada opción de los desplegables (piloto/escudería)
+# con el color real de su equipo, y añade un puntito de color delante.
+components.html(
+    f"""
+    <script>
+    const COLOR_MAP = {json.dumps(NAME_COLOR_MAP)};
+    function colorizeOptions() {{
+        try {{
+            const doc = window.parent.document;
+            const items = doc.querySelectorAll('li[role="option"]');
+            items.forEach((li) => {{
+                const label = li.textContent.trim();
+                const color = COLOR_MAP[label];
+                if (color && !li.dataset.f1Colored) {{
+                    li.dataset.f1Colored = "1";
+                    li.style.borderLeft = `5px solid ${{color}}`;
+                    li.style.background = `linear-gradient(90deg, ${{color}}26, transparent 65%)`;
+                    const dot = doc.createElement('span');
+                    dot.style.display = 'inline-block';
+                    dot.style.width = '9px';
+                    dot.style.height = '9px';
+                    dot.style.borderRadius = '50%';
+                    dot.style.background = color;
+                    dot.style.marginRight = '8px';
+                    li.prepend(dot);
+                    li.addEventListener('mouseenter', () => {{
+                        li.style.background = `linear-gradient(90deg, ${{color}}55, transparent 85%)`;
+                    }});
+                    li.addEventListener('mouseleave', () => {{
+                        li.style.background = `linear-gradient(90deg, ${{color}}26, transparent 65%)`;
+                    }});
+                }}
+            }});
+        }} catch (e) {{ /* entorno restringido: se ignora */ }}
+    }}
+    try {{
+        const observer = new MutationObserver(colorizeOptions);
+        observer.observe(window.parent.document.body, {{ childList: true, subtree: true }});
+        colorizeOptions();
+        setInterval(colorizeOptions, 400);
+    }} catch (e) {{ /* entorno restringido: se ignora */ }}
+    </script>
+    """,
+    height=0,
 )
 
 st.markdown(
@@ -226,69 +336,71 @@ st.caption(
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown(
-        '<div class="section-title">📋 Antes de la carrera</div>'
-        '<div class="section-desc">Datos conocidos antes de la salida: quién corre, con qué coche '
-        'y desde qué posición.</div>',
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True, key="col1_card"):
+        st.markdown(
+            '<div class="section-title">📋 Antes de la carrera</div>'
+            '<div class="section-desc">Datos conocidos antes de la salida: quién corre, con qué coche '
+            'y desde qué posición.</div>',
+            unsafe_allow_html=True,
+        )
 
-    season = st.number_input("Temporada", min_value=2022, max_value=2026, value=2024)
-    ronda = st.number_input("Ronda", min_value=1, max_value=24, value=1)
+        season = st.number_input("Temporada", min_value=2022, max_value=2026, value=2024)
+        ronda = st.number_input("Ronda", min_value=1, max_value=24, value=1)
 
-    driver_options = sorted(DRIVER_INFO, key=lambda d: DRIVER_INFO[d]["name"])
-    driverId = st.selectbox(
-        "Piloto", options=driver_options, format_func=lambda d: DRIVER_INFO[d]["name"], key="driverId"
-    )
+        driver_options = sorted(DRIVER_INFO, key=lambda d: DRIVER_INFO[d]["name"])
+        driverId = st.selectbox(
+            "Piloto", options=driver_options, format_func=lambda d: DRIVER_INFO[d]["name"], key="driverId"
+        )
 
-    if st.session_state.get("_prev_driver") != driverId:
-        st.session_state["constructorId"] = DRIVER_INFO[driverId]["team"]
-        st.session_state["_prev_driver"] = driverId
+        if st.session_state.get("_prev_driver") != driverId:
+            st.session_state["constructorId"] = DRIVER_INFO[driverId]["team"]
+            st.session_state["_prev_driver"] = driverId
 
-    driver_team_color = TEAM_COLORS[DRIVER_INFO[driverId]["team"]]
-    st.markdown(
-        f'{pill(driver_team_color, TEAM_NAMES[DRIVER_INFO[driverId]["team"]])} '
-        f'&nbsp; {DRIVER_INFO[driverId]["nationality"]} · Nº {DRIVER_INFO[driverId]["number"]}',
-        unsafe_allow_html=True,
-    )
+        driver_team_color = TEAM_COLORS[DRIVER_INFO[driverId]["team"]]
+        st.markdown(
+            f'{pill(driver_team_color, TEAM_NAMES[DRIVER_INFO[driverId]["team"]])} '
+            f'&nbsp; {DRIVER_INFO[driverId]["nationality"]} · Nº {DRIVER_INFO[driverId]["number"]}',
+            unsafe_allow_html=True,
+        )
 
-    team_options = sorted(TEAM_NAMES, key=lambda c: TEAM_NAMES[c])
-    constructorId = st.selectbox(
-        "Escudería", options=team_options, format_func=lambda c: TEAM_NAMES[c], key="constructorId"
-    )
-    constructorName = TEAM_NAMES[constructorId]
-    constructor_nationality = TEAM_NATIONALITY[constructorId]
-    driver_nationality = DRIVER_INFO[driverId]["nationality"]
-    number = DRIVER_INFO[driverId]["number"]
+        team_options = sorted(TEAM_NAMES, key=lambda c: TEAM_NAMES[c])
+        constructorId = st.selectbox(
+            "Escudería", options=team_options, format_func=lambda c: TEAM_NAMES[c], key="constructorId"
+        )
+        constructorName = TEAM_NAMES[constructorId]
+        constructor_nationality = TEAM_NATIONALITY[constructorId]
+        driver_nationality = DRIVER_INFO[driverId]["nationality"]
+        number = DRIVER_INFO[driverId]["number"]
 
-    team_color = TEAM_COLORS[constructorId]
-    st.markdown(pill(team_color, f"Escudería {constructor_nationality}"), unsafe_allow_html=True)
+        team_color = TEAM_COLORS[constructorId]
+        st.markdown(pill(team_color, f"Escudería {constructor_nationality}"), unsafe_allow_html=True)
 
-    circuit_options = sorted(CIRCUIT_NAMES, key=lambda c: CIRCUIT_NAMES[c])
-    circuitId = st.selectbox(
-        "Circuito", options=circuit_options, format_func=lambda c: CIRCUIT_NAMES[c]
-    )
-    circuitName = CIRCUIT_NAMES[circuitId]
-    country = circuito_a_pais[circuitName]
-    st.caption(f"📍 País: **{country}**")
+        circuit_options = sorted(CIRCUIT_NAMES, key=lambda c: CIRCUIT_NAMES[c])
+        circuitId = st.selectbox(
+            "Circuito", options=circuit_options, format_func=lambda c: CIRCUIT_NAMES[c]
+        )
+        circuitName = CIRCUIT_NAMES[circuitId]
+        country = circuito_a_pais[circuitName]
+        st.caption(f"📍 País: **{country}**")
 
-    grid = st.number_input("Posición de salida (grid)", min_value=1, max_value=20, value=1)
-    quali_position = st.number_input("Posición en clasificación", min_value=1, max_value=20, value=1)
-    q1 = st.number_input("Tiempo Q1 (segundos)", min_value=0.0, value=90.0)
-    q2 = st.number_input("Tiempo Q2 (segundos)", min_value=0.0, value=89.0)
-    q3 = st.number_input("Tiempo Q3 (segundos)", min_value=0.0, value=88.0)
+        grid = st.number_input("Posición de salida (grid)", min_value=1, max_value=20, value=1)
+        quali_position = st.number_input("Posición en clasificación", min_value=1, max_value=20, value=1)
+        q1 = st.number_input("Tiempo Q1 (segundos)", min_value=0.0, value=90.0)
+        q2 = st.number_input("Tiempo Q2 (segundos)", min_value=0.0, value=89.0)
+        q3 = st.number_input("Tiempo Q3 (segundos)", min_value=0.0, value=88.0)
 
 with col2:
-    st.markdown(
-        '<div class="section-title">🔴 En directo</div>'
-        '<div class="section-desc">Datos que cambian vuelta a vuelta mientras la carrera '
-        'está en marcha.</div>',
-        unsafe_allow_html=True,
-    )
-    lap = st.number_input("Vuelta actual", min_value=1, max_value=80, value=1)
-    position_en_vuelta = st.number_input("Posición en esa vuelta", min_value=1, max_value=20, value=1)
-    paradas_hasta_ahora = st.number_input("Paradas hechas hasta ahora", min_value=0, max_value=5, value=0)
-    ultima_pit_duration = st.number_input("Duración última parada (segundos)", min_value=0.0, value=0.0)
+    with st.container(border=True, key="col2_card"):
+        st.markdown(
+            '<div class="section-title">🔴 En directo</div>'
+            '<div class="section-desc">Datos que cambian vuelta a vuelta mientras la carrera '
+            'está en marcha.</div>',
+            unsafe_allow_html=True,
+        )
+        lap = st.number_input("Vuelta actual", min_value=1, max_value=80, value=1)
+        position_en_vuelta = st.number_input("Posición en esa vuelta", min_value=1, max_value=20, value=1)
+        paradas_hasta_ahora = st.number_input("Paradas hechas hasta ahora", min_value=0, max_value=5, value=0)
+        ultima_pit_duration = st.number_input("Duración última parada (segundos)", min_value=0.0, value=0.0)
 
 st.markdown('<div class="checker-strip"></div>', unsafe_allow_html=True)
 
@@ -331,19 +443,19 @@ if st.button("🏎️ Predecir posición final", type="primary"):
 
     st.markdown(
         f"""
-        <div class="section-card" style="border-color:{team_color};background:{team_color}14;">
+        <div class="result-card" style="--team-color:{team_color};">
             <div style="display:flex;align-items:center;gap:0.9rem;">
                 <div style="font-size:2.6rem;">{medalla}</div>
                 <div>
-                    <div style="font-size:0.9rem;opacity:0.8;">
+                    <div style="font-size:0.9rem;opacity:0.85;">
                         {DRIVER_INFO[driverId]["name"]} · {TEAM_NAMES[constructorId]}
                     </div>
-                    <div style="font-size:1.8rem;font-weight:800;">
+                    <div style="font-size:1.8rem;font-weight:800;color:#ffffff;">
                         Posición final estimada: {prediccion_redondeada}ª
                     </div>
                 </div>
             </div>
-            <p style="margin-top:0.6rem;opacity:0.7;font-size:0.85rem;">
+            <p style="margin-top:0.6rem;opacity:0.75;font-size:0.85rem;">
                 Valor exacto del modelo (sin redondear): {prediccion:.2f}
             </p>
         </div>
