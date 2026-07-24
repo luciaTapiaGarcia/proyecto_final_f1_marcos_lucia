@@ -1,3 +1,9 @@
+# este archivo es la app de Streamlit: la parte "bonita" del proyecto, donde
+# alguien que no sabe nada de Machine Learning puede elegir un piloto, una
+# carrera, y ver que puesto le calcula el modelo que entrenamos en el notebook
+# (src/explore.ipynb). Aqui no se entrena nada, solo se carga el modelo ya
+# guardado (los .pkl) y se usa para predecir.
+
 import streamlit as st
 import pandas as pd
 import joblib
@@ -7,6 +13,11 @@ st.set_page_config(page_title="Predictor de Puesto en F1", page_icon="🏁", lay
 # ---------------------------------------------------------------------------
 # Datos auxiliares (derivados del dataset 2022-2024) para que la interfaz
 # muestre nombres reales, colores de escudería y evite listas redundantes.
+#
+# esto lo escribimos a mano porque el modelo, por dentro, no conoce a "Charles
+# Leclerc": conoce el codigo "leclerc" (que es lo que usa LabelEncoder). estos
+# diccionarios son el "traductor" que le permite al usuario ver nombres, banderas
+# y colores de verdad en vez de codigos internos.
 # ---------------------------------------------------------------------------
 
 DRIVER_INFO = {
@@ -113,6 +124,8 @@ CIRCUIT_NAMES = {
     "zandvoort": "Circuit Park Zandvoort",
 }
 
+# para los botones usamos solo el apellido (si no, con nombre y apellido los
+# botones quedarian demasiado anchos y desiguales entre si)
 SHORT_NAME = {did: info["name"].split()[-1] for did, info in DRIVER_INFO.items()}
 
 # Pilotos agrupados y ordenados por escudería, para que el "muro" de botones
@@ -122,6 +135,9 @@ TEAM_ORDER = sorted(TEAM_NAMES, key=lambda t: TEAM_NAMES[t])
 
 
 def pill(color: str, text: str) -> str:
+    # genera una "pastillita" de html (un span redondeado con borde de color)
+    # para mostrar el piloto/escuderia seleccionados. la usamos varias veces
+    # mas abajo, de ahi que sea una funcion en vez de repetir el html cada vez
     return (
         f'<span style="background:{color}22;color:{color};border:1px solid {color};'
         f'padding:2px 10px;border-radius:999px;font-weight:600;font-size:0.85rem;">{text}</span>'
@@ -130,6 +146,11 @@ def pill(color: str, text: str) -> str:
 
 @st.cache_resource
 def cargar_artefactos():
+    # @st.cache_resource hace que estos .pkl solo se carguen UNA VEZ, la primera
+    # vez que alguien abre la app. sin esto, streamlit volveria a leer los 5
+    # ficheros del disco cada vez que el usuario toca cualquier boton (streamlit
+    # re-ejecuta todo el script de arriba a abajo en cada interaccion), y la app
+    # iria muchisimo mas lenta para nada, porque el modelo no cambia entre medias
     modelo = joblib.load("modelo_regresion_lineal.pkl")
     scaler = joblib.load("scaler.pkl")
     encoders = joblib.load("encoders.pkl")
@@ -143,6 +164,13 @@ modelo, scaler, encoders, columnas, circuito_a_pais = cargar_artefactos()
 # ---------------------------------------------------------------------------
 # Estilos — tema F1: fondo rojo/negro con relieve, tarjetas de cristal,
 # inputs en blanco y botones de piloto/escudería coloreados por equipo.
+#
+# streamlit no deja poner un color distinto a cada boton desde python
+# directamente, asi que el truco es: a cada boton le damos una key unica
+# (driver_leclerc, driver_hamilton...) y luego generamos aqui, por codigo,
+# una regla de css para cada uno usando esa key. Asi no hace falta escribir
+# a mano 40 reglas de css, una por piloto/escuderia: se generan solas a partir
+# de los diccionarios de arriba.
 # ---------------------------------------------------------------------------
 
 driver_btn_css = "\n".join(
@@ -401,6 +429,12 @@ st.markdown(
 
 # ---------------------------------------------------------------------------
 # Selección de piloto y escudería mediante "muros" de botones de color.
+#
+# streamlit vuelve a ejecutar TODO el script cada vez que tocas cualquier
+# cosa, asi que si no guardamos la seleccion en algun sitio, se "olvidaria"
+# de que piloto habias elegido en cuanto pulsaras otro boton. por eso usamos
+# st.session_state, que es una especie de memoria que sobrevive entre esas
+# re-ejecuciones mientras el usuario tenga la pagina abierta.
 # ---------------------------------------------------------------------------
 
 if "selected_driver" not in st.session_state:
@@ -408,6 +442,10 @@ if "selected_driver" not in st.session_state:
 if "selected_team" not in st.session_state:
     st.session_state["selected_team"] = DRIVER_INFO[DRIVER_ORDER[0]]["team"]
 if "_prev_driver" not in st.session_state:
+    # _prev_driver guarda el ultimo piloto que habia seleccionado, para poder
+    # comparar mas abajo "¿ha cambiado el piloto desde la ultima vez?" y, si es
+    # asi, autoseleccionar su escuderia real (sin este truco no habria forma
+    # facil de saber si el piloto acaba de cambiar o sigue siendo el mismo)
     st.session_state["_prev_driver"] = DRIVER_ORDER[0]
 
 st.markdown('<div class="section-title">🏎️ Elige piloto y escudería</div>', unsafe_allow_html=True)
@@ -422,15 +460,24 @@ st.markdown(
 st.markdown('<div class="subgroup-title">Piloto</div>', unsafe_allow_html=True)
 clicked_driver = None
 driver_cols = st.columns(7)
+# repartimos los 28 pilotos en 7 columnas: el piloto 0 va en la columna 0, el 1
+# en la 1... el 7 vuelve a la columna 0 (de ahi el "% 7"), y asi se va llenando
+# el muro de botones fila a fila
 for i, did in enumerate(DRIVER_ORDER):
     with driver_cols[i % 7]:
         with st.container(key=f"driver_{did}"):
             if st.button(SHORT_NAME[did], key=f"btn_driver_{did}", use_container_width=True):
+                # st.button devuelve True solo en el instante en que se pulsa,
+                # asi que en cuanto detectamos el click lo guardamos en una
+                # variable aparte (clicked_driver) para poder usarlo despues
                 clicked_driver = did
 
 if clicked_driver:
     st.session_state["selected_driver"] = clicked_driver
 
+# si el piloto ha cambiado respecto a la ultima vez, le asignamos su escuderia
+# real automaticamente (asi el usuario no tiene que elegir tambien la escuderia
+# a mano cada vez, aunque luego pueda cambiarla si quiere probar otra cosa)
 if st.session_state["_prev_driver"] != st.session_state["selected_driver"]:
     st.session_state["selected_team"] = DRIVER_INFO[st.session_state["selected_driver"]]["team"]
     st.session_state["_prev_driver"] = st.session_state["selected_driver"]
@@ -445,6 +492,9 @@ for i, tid in enumerate(TEAM_ORDER):
                 clicked_team = tid
 
 if clicked_team:
+    # si el usuario pulsa una escuderia a mano, eso manda por encima de la
+    # autoseleccion de arriba (por ejemplo, para simular "¿y si Hamilton
+    # hubiera fichado por Ferrari?")
     st.session_state["selected_team"] = clicked_team
 
 driverId = st.session_state["selected_driver"]
@@ -558,6 +608,12 @@ with st.container(key="predict_action"):
 
 if predict_clicked:
 
+    # armamos una fila (un DataFrame de una sola fila) con exactamente las
+    # mismas columnas que se usaron para entrenar el modelo en el notebook.
+    # los campos de texto (driverId, constructorId, circuitId...) hay que
+    # pasarlos por los MISMOS LabelEncoder que se usaron en el entrenamiento
+    # (encoders.pkl), para que "leclerc" se convierta siempre en el mismo
+    # numero que vio el modelo durante el entrenamiento
     entrada = pd.DataFrame([{
         "season": season,
         "round": ronda,
@@ -581,16 +637,29 @@ if predict_clicked:
         "ultima_pit_duration_seg": ultima_pit_duration,
     }])
 
+    # columnas.pkl guarda el orden EXACTO de columnas que espera el modelo.
+    # si aqui el orden fuera distinto al del entrenamiento, el modelo leeria
+    # cada numero como si fuera otra variable distinta y la prediccion saldria
+    # mal sin que se note ningun error
     entrada = entrada[columnas]
 
+    # el scaler.pkl es el mismo que se uso en el notebook para reescalar las
+    # variables numericas antes de entrenar (llevarlas todas a un rango
+    # parecido). aqui aplicamos esa misma transformacion a los datos que ha
+    # metido el usuario, para que hablen "el mismo idioma" que vio el modelo
     entrada_escalada = pd.DataFrame(
         scaler.transform(entrada),
         columns=entrada.columns
     )
 
+    # el modelo devuelve un numero con decimales (por ejemplo 2.95), no una
+    # posicion entera de verdad, asi que lo redondeamos y lo recortamos entre
+    # 1 y 20 (no existe la posicion "0" ni la "23" en una carrera de F1)
     prediccion = modelo.predict(entrada_escalada)[0]
     prediccion_redondeada = max(1, min(20, round(prediccion)))
 
+    # un pequeño detalle de podio: si el puesto calculado es top 3, mostramos
+    # la medalla correspondiente en vez de la bandera de cuadros generica
     medalla = {1: "🥇", 2: "🥈", 3: "🥉"}.get(prediccion_redondeada, "🏁")
 
     st.markdown(
